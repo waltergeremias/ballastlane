@@ -1,0 +1,88 @@
+name: 1.0.0
+
+trigger:
+  branches:
+    include:
+      - 'release/*'
+      - 'master'
+
+pool:
+  name: 'wal'
+  demands: 
+  - Agent.Name -equals w1
+
+  paths:
+    exclude:
+      - pipelines
+
+
+parameters:
+
+  - name: apiversion
+    displayName: 'api version'
+    type: string
+    default: '1.0.0'
+  - name: namespace
+    displayName: 'Namespace'
+    type: string
+    default: 'ballastlane'
+    
+jobs:
+
+  - deployment: 
+    environment: DEV
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: Docker@2
+              inputs:
+                containerRegistry: 'DockerHUB'
+                repository: 'waltergeremias/ballastane'
+                command: 'buildAndPush'
+                Dockerfile: 'Dockerfile'
+                #tags: |
+                #  ${{ parameters.apiversion }}
+
+            
+            - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+              displayName: 'Replace tokens'
+              inputs:
+                targetFiles: |
+                  helm/*.yaml
+                  helm/templates/*.yml
+              
+      
+#            - task: TerraformInstaller@0
+#              inputs:
+#                terraformVersion: 'latest'
+#            - script: |
+#                terraform --version
+#                terraform -chdir=terraform init 
+#                terraform -chdir=terraform plan -out=tfplan
+#                terraform -chdir=terraform apply -auto-approve  tfplan
+#                #terraform -chdir=terraform destroy
+#              displayName: 'Terraform Init and Plan'
+#              failOnStderr: false
+            - script: |
+                az account set --subscription e79a3226-da3c-40fe-bd26-93c3f4c180a0
+                az aks get-credentials --resource-group ballastlane-aks --name ballastlane-aks --overwrite-existing
+                kubectl get deployments --all-namespaces=true
+                kubectl create namespace ${{ parameters.namespace}}
+                kubectl config set-context --current --namespace=${{ parameters.namespace}}
+                
+            - bash: |
+                helm install apiball ./apiball
+                helm install postgres ./postgres
+
+            #- task: Kubernetes@1
+            #  displayName: kubectl apply using arguments
+            #  inputs:
+            #    connectionType: Azure Resource Manager
+            #    azureSubscriptionEndpoint: $(aks_id)
+            #    azureResourceGroup: $(aks_node_rg)
+            #    kubernetesCluster: $(aks_fqdn)
+            #    command: apply
+            #    arguments: -f helm/api.yml

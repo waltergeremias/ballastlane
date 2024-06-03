@@ -1,0 +1,14 @@
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.apiball.name }}
+  labels: 
+    group: {{ .Values.apiball.group }}
+spec:
+  type: {{ .Values.apiball.service.type }}
+  selector:             
+    app: {{ .Values.apiball.name }}
+  ports:
+    - port: {{ .Values.apiball.service.port }}       
+      targetPort: {{ .Values.apiball.container.port }}   
